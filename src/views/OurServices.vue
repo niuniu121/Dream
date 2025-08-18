@@ -61,7 +61,7 @@ function subscribe() {
   );
 }
 
-/* —— 文案“自动分段”：
+/* 
    把每条 bullets 的长句按中文常见标点切成更短的片段 —— */
 const SPLIT_RE = /[。；;、，,·•\-—]+/g;
 function splitLines(arr) {

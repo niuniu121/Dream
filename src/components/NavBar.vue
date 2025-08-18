@@ -25,10 +25,10 @@
         <router-link to="/services" class="nav-item" @click="closeMenu"
           >Services</router-link
         >
-        <router-link to="/blog" class="nav-item" @click="closeMenu"
-          >Blog</router-link
+        <router-link to="/team" class="nav-item" @click="closeMenu"
+          >Team</router-link
         >
-        <router-link to="/contact" class="nav-item" @click="closeMenu"
+        <router-link to="/contract" class="nav-item" @click="closeMenu"
           >Contact</router-link
         >
         <a href="#book" class="book-btn mobile-only" @click="closeMenu"
@@ -36,7 +36,6 @@
         >
       </nav>
 
-      <!-- CTA Button (Desktop only) -->
       <div class="cta-button desktop-only">
         <a href="#book" class="book-btn">Book Appointment</a>
       </div>
@@ -52,7 +51,6 @@ const closeMenu = () => (isOpen.value = false);
 </script>
 
 <style scoped>
-/* 通用样式 */
 .navbar {
   background-color: #fff;
   border-bottom: 1px solid #eee;
@@ -87,7 +85,6 @@ const closeMenu = () => (isOpen.value = false);
   margin-left: 10px;
 }
 
-/* Desktop nav */
 .nav-links {
   display: flex;
   gap: 20px;

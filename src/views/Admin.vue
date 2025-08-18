@@ -59,6 +59,11 @@ async function handleLogout() {
   router.replace("/login");
 }
 
+//user detail Page
+async function userDetail() {
+  router.replace("/customer");
+}
+
 function parseLines(s) {
   return s
     .split("\n")
@@ -145,6 +150,7 @@ async function removeRow(id) {
       <div class="right">
         <span class="user">{{ userEmail }}</span>
         <button class="logout" @click="handleLogout">退出</button>
+        <button class="logout" @click="userDetail">用户详情</button>
       </div>
     </header>
 

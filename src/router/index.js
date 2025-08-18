@@ -3,6 +3,9 @@ import Home from "../views/HomeView.vue";
 import Login from "../views/LoginPage.vue";
 import Admin from "../views/Admin.vue";
 import OurServices from '../views/OurServices.vue'
+import ContractPage from '../views/ContractPage.vue'
+import CustomerDeatail from '../views/CustomerDeatail.vue'
+import TeamPage from '../views/TeamPage.vue'
 import { auth } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -10,6 +13,9 @@ const routes = [
   { path: "/", component: Home },
   { path: "/login", component: Login },
   { path: "/services", component: OurServices },
+  { path: "/contract", component: ContractPage },
+  { path: "/customer", component: CustomerDeatail },
+  { path: "/team", component: TeamPage },
   { path: "/admin", component: Admin, meta: { requiresAuth: true } },
 ];
 
