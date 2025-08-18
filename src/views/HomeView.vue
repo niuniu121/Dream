@@ -17,7 +17,7 @@ async function testFirestore() {
 
 <template>
   <div>
-    <h1>测试 Firebase</h1>
-    <button @click="testFirestore">写入一条测试数据</button>
+    <h1>Home</h1>
+    <button @click="testFirestore">lalala</button>
   </div>
 </template>
