@@ -1,98 +1,100 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { ref, onMounted, onBeforeUnmount, computed } from "vue";
 import { gsap } from "gsap";
+import { db } from "../firebase";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  getDocs,
+} from "firebase/firestore";
 
-/* ================== 数据 ================== */
-const plans = ref([
-  {
-    code: "A",
-    title: "极速诊断包",
-    price: 99,
-    duration: "45 分钟",
-    badge: "热门",
-    bullets: [
-      "猎头视角简历/LinkedIn 扫描报告",
-      "竞争力差距分析（3 大盲区定位）",
-      "24 小时内交付可执行方案",
-    ],
-    cta: { text: "Book Now", type: "primary" },
-  },
-  {
-    code: "B1",
-    title: "面试护航包",
-    price: 899,
-    duration: "48 小时蜕变",
-    bullets: [
-      "简历/求职信重构（高转化模板）",
-      "LinkedIn 头条三黄金关键词",
-      "模拟面试 + 实时评分卡反馈",
-    ],
-    cta: { text: "Book Now", type: "primary" },
-  },
-  {
-    code: "B2",
-    title: "人脉破局包",
-    price: 1999,
-    duration: "7 天冲刺",
-    badge: "直推",
-    bullets: [
-      "B1 全服务 + 50-100 精英人脉代拓",
-      "岗位匹配内推（300+ 合作企业）",
-      "两版简历并行（多赛道推进）",
-    ],
-    cta: { text: "Request to Book", type: "outline" },
-  },
-  {
-    code: "C",
-    title: "铂金保障包",
-    price: 5999,
-    duration: "含签证支持",
-    badge: "保障",
-    bullets: [
-      "B2 全服务 + 工作机会担保",
-      "无限次简历迭代",
-      "无 offer 退款 $3,000",
-    ],
-    cta: { text: "Request to Book", type: "outline" },
-  },
-  {
-    code: "D",
-    title: "自由拼装包",
-    price: 299,
-    duration: "起",
-    bullets: [
-      "模块化精准强化（简历/面试/谈薪）",
-      "1 小时聚焦训练（含 STAR 速成）",
-      "24/7 弹性预约，拒绝捆绑",
-    ],
-    cta: { text: "Explore Plans", type: "ghost" },
-  },
-]);
+/* ============== 数据状态 ============== */
+const rawPlans = ref([]);
+let unsubscribe = null;
+
+function mapDoc(d) {
+  const x = d.data();
+  return {
+    id: d.id,
+    code: x.code,
+    title: x.title,
+    price: x.price,
+    duration: x.tagline || x.duration || "",
+    badge: x.badge || "",
+    bullets: Array.isArray(x.bullets) ? x.bullets : [],
+    cta: x.cta || { text: "Book Now", type: "primary" },
+    published:
+      typeof x.published === "boolean"
+        ? x.published
+        : typeof x.active === "boolean"
+          ? x.active
+          : true,
+    order: typeof x.order === "number" ? x.order : 999,
+  };
+}
+
+/* 订阅（索引缺失或无数据时自动降级） */
+async function fallbackLoad() {
+  const snap = await getDocs(collection(db, "services"));
+  rawPlans.value = snap.docs
+    .map(mapDoc)
+    .filter((it) => it.published !== false)
+    .sort((a, b) => a.order - b.order);
+}
+function subscribe() {
+  const base = collection(db, "services");
+  const q = query(
+    base,
+    where("published", "==", true),
+    orderBy("order", "asc")
+  );
+  unsubscribe = onSnapshot(
+    q,
+    (snap) => {
+      rawPlans.value = snap.docs.map(mapDoc);
+      if (!rawPlans.value.length) fallbackLoad();
+    },
+    () => fallbackLoad()
+  );
+}
+
+/* —— 文案“自动分段”：
+   把每条 bullets 的长句按中文常见标点切成更短的片段 —— */
+const SPLIT_RE = /[。；;、，,·•\-—]+/g;
+function splitLines(arr) {
+  const out = [];
+  for (const s of arr || []) {
+    const parts = String(s)
+      .split(SPLIT_RE)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    out.push(...parts);
+  }
+  return out;
+}
+
+/* 供模板使用的数据：带分段 bullets */
+const plans = computed(() =>
+  rawPlans.value.map((p) => ({ ...p, bulletsSplit: splitLines(p.bullets) }))
+);
 
 onMounted(() => {
-  gsap.from(".services .container", {
-    opacity: 0,
-    duration: 0.6,
-    ease: "power2.out",
-  });
-
-  gsap.from(".hero > *", {
-    y: 12,
-    opacity: 0,
-    duration: 0.7,
-    ease: "power3.out",
-    stagger: 0.08,
-    delay: 0.1,
-  });
-
+  subscribe();
+  gsap.from(".hero", { opacity: 0, y: 8, duration: 0.5, ease: "power2.out" });
   gsap.from(".card", {
-    y: 22,
     opacity: 0,
-    duration: 0.65,
-    ease: "power3.out",
-    stagger: 0.08,
-    delay: 0.2,
+    y: 14,
+    duration: 0.45,
+    ease: "power2.out",
+    stagger: 0.05,
+    delay: 0.05,
   });
+});
+onBeforeUnmount(() => {
+  if (typeof unsubscribe === "function") unsubscribe();
 });
 </script>
 
@@ -105,55 +107,55 @@ onMounted(() => {
       </header>
 
       <div class="grid">
-        <article v-for="p in plans" :key="p.code" class="card">
-          <div class="banner">
+        <article v-for="p in plans" :key="p.id || p.code" class="card">
+          <div class="card-top">
             <div class="pill">{{ p.code }}</div>
             <span v-if="p.badge" class="badge">{{ p.badge }}</span>
-            <svg
-              class="blob"
-              viewBox="0 0 200 200"
-              xmlns="http://www.w3.org/2000/svg"
+          </div>
+
+          <h3 class="title">{{ p.title }}</h3>
+
+          <div class="price-line">
+            <span class="price">AUD ${{ p.price }}</span>
+            <span class="dot">•</span>
+            <span class="duration">{{ p.duration }}</span>
+          </div>
+
+          <!-- 文案分段 + 每条三行省略 -->
+          <ul class="bullets">
+            <li v-for="(b, idx) in p.bulletsSplit" :key="idx">
+              <span class="clamp-3">{{ b }}</span>
+            </li>
+          </ul>
+
+          <div class="actions">
+            <button
+              :class="[
+                'btn',
+                p.cta?.type === 'primary' && 'btn-primary',
+                p.cta?.type === 'outline' && 'btn-outline',
+                p.cta?.type === 'ghost' && 'btn-ghost',
+              ]"
             >
-              <path
-                d="M38.7,-59.3C51.2,-51.4,63.3,-41.1,68.5,-28.4C73.7,-15.7,72.1,-0.7,67.4,12.2C62.7,25.1,54.9,35.8,44.8,45.8C34.8,55.8,22.5,65.1,8.2,71.1C-6.1,77.2,-22.5,80.1,-37.2,75C-51.9,69.9,-64.8,56.8,-71.1,41.3C-77.4,25.8,-77.1,7.9,-74.7,-9.5C-72.3,-26.9,-67.7,-43.9,-56.9,-53.2C-46.1,-62.5,-29.1,-64,-13.5,-64.6C2.2,-65.2,17.6,-64.8,38.7,-59.3Z"
-                fill="currentColor"
-              />
-            </svg>
+              {{ p.cta?.text || "Book Now" }}
+            </button>
+            <button class="btn btn-ghost subtle">了解详情</button>
           </div>
 
-          <div class="body">
-            <h3 class="title">{{ p.title }}</h3>
-
-            <div class="price-line">
-              <span class="price">${{ p.price }}</span>
-              <span class="sep">•</span>
-              <span class="duration">{{ p.duration }}</span>
-            </div>
-
-            <ul class="bullets">
-              <li v-for="b in p.bullets" :key="b">{{ b }}</li>
-            </ul>
-
-            <div class="actions">
-              <button
-                :class="[
-                  'btn',
-                  p.cta.type === 'primary' && 'btn-primary',
-                  p.cta.type === 'outline' && 'btn-outline',
-                  p.cta.type === 'ghost' && 'btn-ghost',
-                ]"
-              >
-                {{ p.cta.text }}
-              </button>
-              <a class="link" href="javascript:void(0)">了解详情</a>
-            </div>
-          </div>
+          <svg
+            class="blob"
+            viewBox="0 0 200 200"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M38.7,-59.3C51.2,-51.4,63.3,-41.1,68.5,-28.4C73.7,-15.7,72.1,-0.7,67.4,12.2C62.7,25.1,54.9,35.8,44.8,45.8C34.8,55.8,22.5,65.1,8.2,71.1C-6.1,77.2,-22.5,80.1,-37.2,75C-51.9,69.9,-64.8,56.8,-71.1,41.3C-77.4,25.8,-77.1,7.9,-74.7,-9.5C-72.3,-26.9,-67.7,-43.9,-56.9,-53.2C-46.1,-62.5,-29.1,-64,-13.5,-64.6C2.2,-65.2,17.6,-64.8,38.7,-59.3Z"
+              fill="currentColor"
+            />
+          </svg>
         </article>
       </div>
 
-      <footer class="note">
-        <p>*人工咨询</p>
-      </footer>
+      <footer class="note"><p>*人工咨询</p></footer>
     </div>
   </section>
 </template>
@@ -161,228 +163,215 @@ onMounted(() => {
 <style scoped>
 :root,
 :host {
-  --bg: #fbfbfd;
+  --bg: #f7f7fb; /* 柔和底色 */
   --card: #ffffff;
-  --text: #1f1f29;
-  --muted: #666a73;
+  --text: #15161a;
+  --muted: #68707c;
   --primary: #7e57c2;
-  --primary-weak: #ede7f6;
-  --ring: rgba(126, 87, 194, 0.25);
-  --shadow: 0 6px 24px rgba(20, 16, 41, 0.06), 0 2px 8px rgba(20, 16, 41, 0.04);
+  --ring: rgba(126, 87, 194, 0.22);
+  --shadow:
+    0 10px 26px rgba(18, 16, 39, 0.07), 0 2px 10px rgba(18, 16, 39, 0.04);
   --radius: 18px;
 }
 
+/* 背景更柔和，顶部加微渐变 */
 .services {
-  /* 顶部柔和渐变，避免上方空荡 */
   background:
-    radial-gradient(950px 420px at 10% -10%, #f1eaff 0%, transparent 60%),
-    radial-gradient(900px 420px at 100% -10%, #f3efff 0%, transparent 60%),
+    radial-gradient(1000px 420px at 5% -10%, #efe9ff 0%, transparent 60%),
+    radial-gradient(900px 380px at 98% -10%, #f2efff 0%, transparent 60%),
     var(--bg);
   min-height: 100vh;
   padding: 56px 0 84px;
 }
-
-/* 更宽容器：移动端紧凑，桌面端舒展 */
 .container {
-  max-width: clamp(980px, 86vw, 1280px);
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 22px;
 }
 
 .hero {
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
 }
 .hero h1 {
-  font-size: clamp(28px, 3.2vw, 40px);
-  letter-spacing: 0.4px;
-  color: var(--text);
   margin: 0 0 6px;
-  font-weight: 800;
+  font-size: clamp(28px, 3vw, 40px);
+  font-weight: 900;
 }
 .hero p {
-  color: var(--muted);
-  font-size: 15px;
   margin: 0;
+  color: var(--muted);
+  font-size: 14px;
 }
 
-/* 自适应网格：自动填满横向空间 */
+/* 三列网格（>1100：3列，<=760:2列，<=520:1列） */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 28px;
-  margin-top: 28px;
+  gap: 22px;
+  margin-top: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-/* ===== 卡片 ===== */
+/* 卡片更大、更精致 */
 .card {
+  position: relative;
   background: var(--card);
+  border: 1px solid rgba(18, 16, 39, 0.08);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  padding: 18px 18px 16px;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
   transition:
-    transform 0.35s ease,
-    box-shadow 0.35s ease,
-    border-color 0.35s ease;
-  border: 1px solid transparent;
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
 }
 .card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 14px 36px rgba(20, 16, 41, 0.12);
+  transform: translateY(-4px);
   border-color: var(--ring);
+  box-shadow: 0 16px 38px rgba(18, 16, 39, 0.12);
 }
 
-.banner {
-  position: relative;
-  height: 110px;
-  background: linear-gradient(180deg, var(--primary-weak), #fff 80%);
+/* 顶部：Code + Badge */
+.card-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 14px 14px 0;
+  margin-bottom: 8px;
 }
 .pill {
   background: #fff;
   color: var(--primary);
   border: 1px solid var(--primary);
-  font-weight: 700;
-  font-size: 13px;
-  padding: 6px 10px;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 5px 12px;
   border-radius: 999px;
-  box-shadow: 0 2px 8px rgba(126, 87, 194, 0.18);
+  box-shadow: 0 1px 6px rgba(126, 87, 194, 0.18);
 }
 .badge {
-  margin-left: auto;
   background: var(--primary);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   border-radius: 10px;
-  padding: 6px 10px;
-  align-self: center;
-}
-.blob {
-  position: absolute;
-  right: -18px;
-  bottom: -18px;
-  width: 120px;
-  color: rgba(126, 87, 194, 0.16);
-  pointer-events: none;
+  padding: 4px 8px;
 }
 
-.body {
-  padding: 18px 18px 16px;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  gap: 10px;
-}
 .title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 800;
+  margin: 6px 0 4px;
+  font-size: 18px;
+  font-weight: 900;
   color: var(--text);
-  letter-spacing: 0.2px;
 }
-
 .price-line {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 .price {
   color: var(--text);
-  font-weight: 800;
-  font-size: 22px;
+  font-weight: 900;
+  font-size: 20px;
 }
-.sep {
-  opacity: 0.4;
+.dot {
+  opacity: 0.45;
 }
 .duration {
   opacity: 0.9;
 }
 
+/* 文案条目（每条 3 行省略） */
 .bullets {
-  margin: 6px 0 0;
+  margin: 0 0 10px;
   padding-left: 18px;
-  color: var(--text);
-  line-height: 1.6;
+  color: #1f2026;
+  line-height: 1.55;
+  font-size: 13px;
 }
 .bullets li {
   margin: 6px 0;
 }
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
+/* 底部按钮区，按钮更好看 */
 .actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: auto;
 }
-
-/* ===== 按钮 ===== */
 .btn {
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid transparent;
-  font-weight: 700;
+  font-weight: 900;
   cursor: pointer;
+  font-size: 13px;
+  letter-spacing: 0.2px;
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease;
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
 }
 .btn-primary {
-  background: var(--primary);
+  background: linear-gradient(135deg, #8b6adf, #6e4fc6);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(126, 87, 194, 0.25);
-}
-.btn-primary:hover {
-  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(126, 87, 194, 0.28);
 }
 .btn-outline {
   background: #fff;
   color: var(--primary);
   border-color: var(--primary);
 }
-.btn-outline:hover {
-  background: var(--primary-weak);
-}
 .btn-ghost {
-  background: transparent;
-  color: var(--text);
-  border-color: rgba(31, 31, 41, 0.12);
+  background: rgba(17, 18, 23, 0.04);
+  color: #1e1f24;
+  border-color: rgba(31, 31, 41, 0.08);
 }
-.btn-ghost:hover {
-  background: #f7f7fb;
+.btn:hover {
+  transform: translateY(-1px);
+}
+.subtle {
+  font-weight: 800;
 }
 
-.link {
-  color: var(--muted);
-  font-weight: 600;
-  text-decoration: none;
-}
-.link:hover {
-  color: var(--text);
+/* 装饰 blob（右下角淡紫色） */
+.blob {
+  position: absolute;
+  right: -22px;
+  bottom: -26px;
+  width: 140px;
+  color: rgba(126, 87, 194, 0.1);
+  pointer-events: none;
 }
 
 .note {
-  margin-top: 26px;
-  color: var(--muted);
-  font-size: 13px;
+  margin-top: 28px;
   text-align: center;
-}
-
-/* 移动端间距微调 */
-@media (max-width: 680px) {
-  .services {
-    padding-top: 42px;
-  }
-  .body {
-    padding: 16px;
-  }
+  color: var(--muted);
+  font-size: 12px;
 }
 </style>
