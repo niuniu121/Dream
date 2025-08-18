@@ -1,7 +1,9 @@
 <template>
   <section class="page">
     <div class="card">
-      <div class="detailNumber">Our contact information: 0424 827 818</div>
+      <div class="detailNumber">
+        Our contact email: dreambridgeaus@gmail.com
+      </div>
       <h1>Submit Your Request</h1>
       <p class="sub">
         Please leave your contact details and request. We will get back to you
@@ -155,7 +157,7 @@ async function handleSubmit() {
 .detailNumber {
   font-weight: bold;
   font-size: 30px;
-  color: #666;
+  color: #a175aa;
 }
 h1 {
   margin: 0 0 6px;
