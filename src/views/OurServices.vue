@@ -2,29 +2,24 @@
 import { ref, onMounted, onBeforeUnmount, computed } from "vue";
 import { gsap } from "gsap";
 import { db } from "../firebase";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  getDocs,
-} from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 
 /* ============== 数据状态 ============== */
 const rawPlans = ref([]);
 let unsubscribe = null;
 
 function mapDoc(d) {
-  const x = d.data();
+  const x = d.data() || {};
   return {
     id: d.id,
-    code: x.code,
-    title: x.title,
-    price: x.price,
+    code: x.code || "",
+    title: x.title || "",
+    price: typeof x.price === "number" ? x.price : Number(x.price) || 0,
+    priceText: x.priceText || "",
     duration: x.tagline || x.duration || "",
     badge: x.badge || "",
     bullets: Array.isArray(x.bullets) ? x.bullets : [],
+    guarantees: Array.isArray(x.guarantees) ? x.guarantees : [],
     cta: x.cta || { text: "Book Now", type: "primary" },
     published:
       typeof x.published === "boolean"
@@ -36,33 +31,16 @@ function mapDoc(d) {
   };
 }
 
-/* 订阅（索引缺失或无数据时自动降级） */
-async function fallbackLoad() {
-  const snap = await getDocs(collection(db, "services"));
-  rawPlans.value = snap.docs
-    .map(mapDoc)
-    .filter((it) => it.published !== false)
-    .sort((a, b) => a.order - b.order);
-}
 function subscribe() {
-  const base = collection(db, "services");
-  const q = query(
-    base,
-    where("published", "==", true),
-    orderBy("order", "asc")
-  );
-  unsubscribe = onSnapshot(
-    q,
-    (snap) => {
-      rawPlans.value = snap.docs.map(mapDoc);
-      if (!rawPlans.value.length) fallbackLoad();
-    },
-    () => fallbackLoad()
-  );
+  const qy = query(collection(db, "services"), orderBy("order", "asc"));
+  unsubscribe = onSnapshot(qy, (snap) => {
+    rawPlans.value = snap.docs
+      .map(mapDoc)
+      .filter((it) => it.published !== false);
+  });
 }
 
-/* 
-   把每条 bullets 的长句按中文常见标点切成更短的片段 —— */
+/* 文案切段 */
 const SPLIT_RE = /[。；;、，,·•\-—]+/g;
 function splitLines(arr) {
   const out = [];
@@ -76,26 +54,28 @@ function splitLines(arr) {
   return out;
 }
 
-/* 供模板使用的数据：带分段 bullets */
 const plans = computed(() =>
   rawPlans.value.map((p) => ({ ...p, bulletsSplit: splitLines(p.bullets) }))
 );
+
+function displayPrice(p) {
+  return p.priceText ? p.priceText : `AUD $${p.price}`;
+}
 
 onMounted(() => {
   subscribe();
   gsap.from(".hero", { opacity: 0, y: 8, duration: 0.5, ease: "power2.out" });
   gsap.from(".card", {
     opacity: 0,
-    y: 14,
+    y: 18,
     duration: 0.45,
     ease: "power2.out",
     stagger: 0.05,
     delay: 0.05,
   });
 });
-onBeforeUnmount(() => {
-  if (typeof unsubscribe === "function") unsubscribe();
-});
+
+onBeforeUnmount(() => unsubscribe && unsubscribe());
 </script>
 
 <template>
@@ -103,30 +83,38 @@ onBeforeUnmount(() => {
     <div class="container">
       <header class="hero">
         <h1>Services</h1>
-        <p>DreamBridge 求职加速 | 毕业生专属价格表</p>
+        <p>DreamBridge 求职加速｜毕业生专属</p>
       </header>
 
       <div class="grid">
         <article v-for="p in plans" :key="p.id || p.code" class="card">
-          <div class="card-top">
-            <div class="pill">{{ p.code }}</div>
+          <div v-if="p.code || p.badge" class="card-top">
+            <div v-if="p.code" class="pill">{{ p.code }}</div>
             <span v-if="p.badge" class="badge">{{ p.badge }}</span>
           </div>
 
           <h3 class="title">{{ p.title }}</h3>
 
           <div class="price-line">
-            <span class="price">AUD ${{ p.price }}</span>
-            <span class="dot">•</span>
-            <span class="duration">{{ p.duration }}</span>
+            <span class="price">{{ displayPrice(p) }}</span>
+            <span v-if="p.duration" class="dot">•</span>
+            <span v-if="p.duration" class="duration">{{ p.duration }}</span>
           </div>
 
-          <!-- 文案分段 + 每条三行省略 -->
           <ul class="bullets">
-            <li v-for="(b, idx) in p.bulletsSplit" :key="idx">
+            <li v-for="(b, i) in p.bulletsSplit" :key="i">
               <span class="clamp-3">{{ b }}</span>
             </li>
           </ul>
+
+          <div v-if="p.guarantees?.length" class="guarantees">
+            <h4>效果保障</h4>
+            <ul>
+              <li v-for="(g, gi) in p.guarantees" :key="gi">
+                <span class="clamp-3">{{ g }}</span>
+              </li>
+            </ul>
+          </div>
 
           <div class="actions">
             <button
@@ -142,11 +130,7 @@ onBeforeUnmount(() => {
             <button class="btn btn-ghost subtle">了解详情</button>
           </div>
 
-          <svg
-            class="blob"
-            viewBox="0 0 200 200"
-            xmlns="http://www.w3.org/2000/svg"
-          >
+          <svg class="blob" viewBox="0 0 200 200" aria-hidden="true">
             <path
               d="M38.7,-59.3C51.2,-51.4,63.3,-41.1,68.5,-28.4C73.7,-15.7,72.1,-0.7,67.4,12.2C62.7,25.1,54.9,35.8,44.8,45.8C34.8,55.8,22.5,65.1,8.2,71.1C-6.1,77.2,-22.5,80.1,-37.2,75C-51.9,69.9,-64.8,56.8,-71.1,41.3C-77.4,25.8,-77.1,7.9,-74.7,-9.5C-72.3,-26.9,-67.7,-43.9,-56.9,-53.2C-46.1,-62.5,-29.1,-64,-13.5,-64.6C2.2,-65.2,17.6,-64.8,38.7,-59.3Z"
               fill="currentColor"
@@ -161,37 +145,58 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* —— 主题与间隙 —— */
 :root,
 :host {
-  --bg: #f7f7fb; /* 柔和底色 */
-  --card: #ffffff;
-  --text: #15161a;
-  --muted: #68707c;
-  --primary: #7e57c2;
-  --ring: rgba(126, 87, 194, 0.22);
+  --primary: #6e4fc6; /* 第二张图的紫 */
+  --bg-light: #f1eeff; /* 更明显的浅紫底 */
   --shadow:
-    0 10px 26px rgba(18, 16, 39, 0.07), 0 2px 10px rgba(18, 16, 39, 0.04);
+    0 12px 28px rgba(18, 16, 39, 0.08), 0 3px 12px rgba(18, 16, 39, 0.05);
+  --ring: rgba(110, 79, 198, 0.3);
+  --gap: 40px; /* 间隙更大更通透 */
   --radius: 18px;
+  --radius-sm: 12px;
+  --muted: #6b7280;
+  --text: #15161a;
 }
 
-/* 背景更柔和，顶部加微渐变 */
+/* 渐变背景：左上浅、右上深，保证缝隙显色 */
 .services {
-  background:
-    radial-gradient(1000px 420px at 5% -10%, #efe9ff 0%, transparent 60%),
-    radial-gradient(900px 380px at 98% -10%, #f2efff 0%, transparent 60%),
-    var(--bg);
+  /* 紫色渐变背景，间隙才能显现 */
+  background: linear-gradient(135deg, #f6f0ff 0%, #e8e0ff 50%, #f6f0ff 100%);
   min-height: 100vh;
-  padding: 56px 0 84px;
+  padding: 64px 0 90px;
 }
+
+.services .grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 36px; /* 横向+纵向都留出紫色间隙 */
+  padding: 8px; /* 让边缘也能露出一点紫色 */
+  background: transparent; /* 关键：间隙透出 services 的背景 */
+}
+
+.services .card {
+  background: #fff; /* 卡片必须是白色 */
+  border: 1px solid rgba(18, 16, 39, 0.08);
+  border-radius: 18px;
+  box-shadow:
+    0 12px 28px rgba(18, 16, 39, 0.08),
+    0 3px 12px rgba(18, 16, 39, 0.05);
+  margin: 0 !important; /* 防止 margin 把间隙填掉 */
+}
+
+/* 如果你有全局 .container 白底，这里强制透明，免得把缝隙盖白 */
 .container {
-  max-width: 1080px;
+  background: transparent !important;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 0 22px;
 }
 
 .hero {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 .hero h1 {
   margin: 0 0 6px;
@@ -204,32 +209,38 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
-/* 三列网格（>1100：3列，<=760:2列，<=520:1列） */
+/* —— 关键：真实可见的“紫色缝隙” —— */
 .grid {
-  display: grid;
-  gap: 22px;
-  margin-top: 14px;
+  display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: var(--gap) !important;
+  row-gap: var(--gap) !important;
+  /* 让缝隙露出父级 section 的紫色；不要任何白色背景 */
+  background: transparent !important;
+  margin-top: 18px;
+  /* 轻微 padding 让四周也留一点紫色边 */
+  padding: 4px;
 }
-@media (max-width: 760px) {
+@media (max-width: 980px) {
   .grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-@media (max-width: 520px) {
+@media (max-width: 600px) {
   .grid {
     grid-template-columns: 1fr;
   }
 }
 
-/* 卡片更大、更精致 */
+/* 卡片：白底对比、圆角、阴影 */
 .card {
   position: relative;
-  background: var(--card);
-  border: 1px solid rgba(18, 16, 39, 0.08);
+  margin: 0 !important; /* 不用 margin，全部交给 gap 控制 */
+  background: #fff;
+  border: 1px solid rgba(18, 16, 39, 0.1);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px 18px 16px;
+  padding: 20px 20px 18px;
   display: grid;
   grid-template-rows: auto auto auto 1fr auto;
   overflow: hidden;
@@ -241,14 +252,14 @@ onBeforeUnmount(() => {
 .card:hover {
   transform: translateY(-4px);
   border-color: var(--ring);
-  box-shadow: 0 16px 38px rgba(18, 16, 39, 0.12);
+  box-shadow: 0 20px 46px rgba(110, 79, 198, 0.22);
 }
 
-/* 顶部：Code + Badge */
 .card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 8px;
 }
 .pill {
@@ -259,7 +270,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   padding: 5px 12px;
   border-radius: 999px;
-  box-shadow: 0 1px 6px rgba(126, 87, 194, 0.18);
+  box-shadow: 0 1px 6px rgba(110, 79, 198, 0.18);
 }
 .badge {
   background: var(--primary);
@@ -267,6 +278,7 @@ onBeforeUnmount(() => {
   font-size: 11px;
   border-radius: 10px;
   padding: 4px 8px;
+  white-space: nowrap;
 }
 
 .title {
@@ -295,9 +307,8 @@ onBeforeUnmount(() => {
   opacity: 0.9;
 }
 
-/* 文案条目（每条 3 行省略） */
 .bullets {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   padding-left: 18px;
   color: #1f2026;
   line-height: 1.55;
@@ -314,7 +325,30 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-/* 底部按钮区，按钮更好看 */
+.guarantees {
+  margin: 8px 0 14px;
+  padding: 10px 12px;
+  background: rgba(110, 79, 198, 0.08);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+}
+.guarantees h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--primary);
+}
+.guarantees ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #1f2026;
+}
+.guarantees li {
+  margin: 4px 0;
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -339,7 +373,7 @@ onBeforeUnmount(() => {
 .btn-primary {
   background: linear-gradient(135deg, #8b6adf, #6e4fc6);
   color: #fff;
-  box-shadow: 0 8px 18px rgba(126, 87, 194, 0.28);
+  box-shadow: 0 8px 18px rgba(110, 79, 198, 0.28);
 }
 .btn-outline {
   background: #fff;
@@ -358,20 +392,27 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-/* 装饰 blob（右下角淡紫色） */
 .blob {
   position: absolute;
   right: -22px;
   bottom: -26px;
   width: 140px;
-  color: rgba(126, 87, 194, 0.1);
+  color: rgba(110, 79, 198, 0.1);
   pointer-events: none;
 }
 
 .note {
-  margin-top: 28px;
+  margin-top: 30px;
   text-align: center;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* 降级处理 */
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .btn {
+    transition: none !important;
+  }
 }
 </style>

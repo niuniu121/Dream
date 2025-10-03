@@ -21,10 +21,12 @@ const loading = ref(false);
 const editingId = ref(null);
 const services = ref([]);
 
+/* 表单：新增 priceText（价格文字） */
 const form = reactive({
   code: "",
   title: "",
-  price: 0,
+  price: 0, // 数字价格（单位 AUD）
+  priceText: "", // 价格文字（若填写将优先生效）
   tagline: "",
   badge: "",
   bulletsText: "",
@@ -43,12 +45,14 @@ onMounted(() => {
     if (!u) return router.replace("/login");
     userEmail.value = u.email || "";
   });
+
   const colRef = collection(db, "services");
-  const q = query(colRef, orderBy("order", "asc"));
-  offSnap = onSnapshot(q, (snap) => {
+  const qy = query(colRef, orderBy("order", "asc"));
+  offSnap = onSnapshot(qy, (snap) => {
     services.value = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   });
 });
+
 onBeforeUnmount(() => {
   offAuth && offAuth();
   offSnap && offSnap();
@@ -59,13 +63,12 @@ async function handleLogout() {
   router.replace("/login");
 }
 
-//user detail Page
 async function userDetail() {
   router.replace("/customer");
 }
 
 function parseLines(s) {
-  return s
+  return String(s || "")
     .split("\n")
     .map((v) => v.trim())
     .filter(Boolean);
@@ -77,6 +80,7 @@ function resetForm() {
     code: "",
     title: "",
     price: 0,
+    priceText: "",
     tagline: "",
     badge: "",
     bulletsText: "",
@@ -96,6 +100,7 @@ async function saveService() {
       code: form.code.trim(),
       title: form.title.trim(),
       price: Number(form.price) || 0,
+      priceText: form.priceText.trim() || null, // << 新增：价格文字
       tagline: form.tagline.trim(),
       badge: form.badge.trim() || null,
       bullets: parseLines(form.bulletsText),
@@ -107,6 +112,7 @@ async function saveService() {
       updatedAt: serverTimestamp(),
       ...(editingId.value ? {} : { createdAt: serverTimestamp() }),
     };
+
     if (!editingId.value) {
       await addDoc(collection(db, "services"), payload);
     } else {
@@ -124,6 +130,7 @@ function editRow(row) {
     code: row.code || "",
     title: row.title || "",
     price: row.price ?? 0,
+    priceText: row.priceText || "", // << 新增
     tagline: row.tagline || "",
     badge: row.badge || "",
     bulletsText: (row.bullets || []).join("\n"),
@@ -140,6 +147,14 @@ async function removeRow(id) {
   if (!confirm("确定删除这条服务吗？")) return;
   await deleteDoc(doc(db, "services", id));
   if (editingId.value === id) resetForm();
+}
+
+/* 小工具：把服务对象格式化为展示用价格 */
+function displayPrice(s) {
+  // 如果有 priceText，就直接展示它；否则展示数字价格
+  if (s.priceText) return s.priceText;
+  const n = Number(s.price) || 0;
+  return `AUD $${n}`;
 }
 </script>
 
@@ -160,10 +175,24 @@ async function removeRow(id) {
         <h2>{{ editingId ? "编辑服务" : "新增服务" }}</h2>
         <div class="form">
           <label><span>标题</span><input v-model="form.title" /></label>
-          <label
-            ><span>价格</span
-            ><input type="number" v-model.number="form.price" min="0"
-          /></label>
+
+          <div class="row2">
+            <label class="col">
+              <span>价格（数字，AUD）</span>
+              <input type="number" v-model.number="form.price" min="0" />
+            </label>
+            <label class="col">
+              <span>价格文字（可选，如：按Offer佣金计费/面议）</span>
+              <input
+                v-model="form.priceText"
+                placeholder="填写则优先展示此文字"
+              />
+            </label>
+          </div>
+
+          <!-- <label
+            ><span>副标题/时长</span><input v-model="form.tagline"
+          /></label> -->
 
           <label
             ><span>核心优势与服务亮点</span>
@@ -175,10 +204,12 @@ async function removeRow(id) {
             <textarea rows="3" v-model="form.guaranteesText" />
           </label>
 
-          <label
-            ><span>市场优势</span>
+          <!-- 如需恢复市场优势，在此解除注释 -->
+          <!--
+          <label><span>市场优势</span>
             <textarea rows="3" v-model="form.advantagesText" />
           </label>
+          -->
 
           <label class="row">
             <input type="checkbox" v-model="form.published" />
@@ -199,23 +230,22 @@ async function removeRow(id) {
         </div>
       </div>
 
-      <!-- 右：列表（修复列数一致） -->
+      <!-- 右：列表 -->
       <div class="panel">
         <h2>当前服务（{{ services.length }}）</h2>
         <table class="table">
           <thead>
             <tr>
               <th class="col-title">标题</th>
-              <th class="col-price">价格</th>
+              <th class="col-price">价格/文字</th>
               <th class="col-status">状态</th>
               <th class="col-ops">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="s in services" :key="s.id">
-              <!-- 去掉 code 列 -->
               <td class="col-title">{{ s.title }}</td>
-              <td class="col-price">AUD ${{ s.price }}</td>
+              <td class="col-price">{{ displayPrice(s) }}</td>
               <td class="col-status">{{ s.published ? "上架" : "下架" }}</td>
               <td class="ops col-ops">
                 <button @click="editRow(s)">编辑</button>
@@ -300,11 +330,19 @@ select {
   border-radius: 10px;
   outline: none;
 }
+
+/* 两列布局：价格数字 + 价格文字 */
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
 .row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .actions {
   display: flex;
   gap: 8px;
@@ -328,7 +366,7 @@ select {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-} /* 固定布局，列更整齐 */
+}
 th,
 td {
   padding: 10px;
@@ -346,12 +384,11 @@ th {
   color: #777;
 }
 
-/* 给每列分配宽度比例，避免抖动 */
 .col-title {
-  width: 48%;
+  width: 42%;
 }
 .col-price {
-  width: 16%;
+  width: 22%;
 }
 .col-status {
   width: 16%;
@@ -375,6 +412,9 @@ th {
 
 @media (max-width: 980px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+  .row2 {
     grid-template-columns: 1fr;
   }
 }

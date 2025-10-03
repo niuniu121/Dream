@@ -1,0 +1,17 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B6ADF"/>
+      <stop offset="1" stop-color="#6E4FC6"/>
+    </linearGradient>
+  </defs>
+  <!-- outer ring -->
+  <circle cx="32" cy="32" r="26" stroke="url(#g)" stroke-width="6" fill="white"/>
+  <!-- left eye -->
+  <circle cx="22" cy="28" r="3" fill="#6E4FC6"/>
+  <!-- smile -->
+  <path d="M22 38c3 4 9 4 12 0" stroke="#6E4FC6" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <!-- magnifier -->
+  <circle cx="40" cy="28" r="9" fill="#F1E9FF" stroke="#6E4FC6" stroke-width="6"/>
+  <path d="M46 34l6 6" stroke="#6E4FC6" stroke-width="6" stroke-linecap="round"/>
+</svg>

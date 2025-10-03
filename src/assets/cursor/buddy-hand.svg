@@ -1,0 +1,21 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g2" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B6ADF"/>
+      <stop offset="1" stop-color="#6E4FC6"/>
+    </linearGradient>
+  </defs>
+  <!-- outer ring -->
+  <circle cx="32" cy="32" r="26" stroke="url(#g2)" stroke-width="6" fill="white"/>
+  <!-- left eye -->
+  <circle cx="22" cy="28" r="3" fill="#6E4FC6"/>
+  <!-- smile（更上扬一点） -->
+  <path d="M22 37c4 5 12 5 16 0" stroke="#6E4FC6" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <!-- magnifier（里面放个小爱心 + 星星） -->
+  <circle cx="40" cy="28" r="9" fill="#F6EFFF" stroke="#6E4FC6" stroke-width="6"/>
+  <path d="M46 34l6 6" stroke="#6E4FC6" stroke-width="6" stroke-linecap="round"/>
+  <!-- heart -->
+  <path d="M38 28c0-2 3-3 4-1c1-2 4-1 4 1c0 2-2 3-4 5c-2-2-4-3-4-5z" fill="#FF7CCF"/>
+  <!-- sparkle -->
+  <path d="M50 18l2 3l3 2l-3 2l-2 3l-2-3l-3-2l3-2l2-3z" fill="#8B6ADF"/>
+</svg>
